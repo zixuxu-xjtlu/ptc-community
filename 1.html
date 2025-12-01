@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PTC智学社区 (AI加强版)</title>
-    <!-- 引入 LeanCloud SDK -->
+    <title>PTC智学社区 (AI识图版)</title>
+    <!-- 1. LeanCloud SDK -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
-    <!-- 引入 Markdown 解析器 (为了让AI回答更好看) -->
+    <!-- 2. Markdown 解析器 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 3. Tesseract OCR (图片文字识别引擎) -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     
     <style>
-        /* --- 全局样式保持不变 --- */
+        /* --- 样式保持不变 --- */
         :root { --primary-color: #4a90e2; --bg-color: #f0f2f5; --card-bg: #ffffff; --text-main: #333; --text-secondary: #666; --danger: #ff4d4f; }
         body { font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; background: var(--bg-color); height: 100vh; display: flex; flex-direction: column; }
         .hidden { display: none !important; }
@@ -18,7 +20,6 @@
         .btn-primary { background: var(--primary-color); color: white; }
         .card { background: var(--card-bg); border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
         
-        /* 布局相关 */
         #login-page { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .login-box { width: 350px; text-align: center; }
         .login-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
@@ -27,29 +28,18 @@
         .col-left, .col-right { overflow-y: auto; padding-right: 5px; }
         .col-center { display: flex; flex-direction: column; overflow-y: hidden; }
         
-        /* 输入区样式升级 */
         .input-area textarea { width: 100%; height: 80px; border: 1px solid #ddd; padding: 10px; resize: none; margin-bottom: 10px; box-sizing: border-box; }
         .file-upload-wrapper { display: inline-block; position: relative; overflow: hidden; margin-right: 10px; }
         .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; }
         
-        /* 帖子样式升级 */
         .qa-scroll-area { flex: 1; overflow-y: auto; padding-right: 5px; }
         .post-image { max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 10px; display: block; cursor: pointer; }
         
-        /* AI 按钮与回答区 */
         .btn-ai { background: linear-gradient(90deg, #6366f1, #8b5cf6); color: white; margin-top: 10px; font-size: 12px; display: flex; align-items: center; gap: 5px;}
-        .btn-ai:hover { opacity: 0.9; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4); }
-        
-        .ai-response-box {
-            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; 
-            padding: 15px; margin-top: 15px; font-size: 14px; line-height: 1.6; color: #334155;
-            display: none; /* 默认隐藏 */
-            animation: fadeIn 0.5s;
-        }
-        .ai-title { font-weight: bold; color: #6366f1; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+        .ai-response-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; margin-top: 15px; font-size: 14px; line-height: 1.6; color: #334155; display: none; animation: fadeIn 0.5s; }
+        .ai-title { font-weight: bold; color: #6366f1; margin-bottom: 5px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 加载动画 */
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 2000; font-weight: bold; color: var(--primary-color); }
         .shop-item { display: flex; align-items: center; margin-bottom: 15px; background: #fafafa; padding: 10px; border-radius: 6px; }
         .ddl-item { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; }
@@ -88,40 +78,31 @@
         </header>
 
         <div class="container">
-            <!-- 左侧 DDL -->
             <aside class="col-left">
                 <div class="card">
                     <h3>📅 DDL 提醒</h3>
-                    <div id="ddl-list"><!-- JS渲染 --></div>
+                    <div id="ddl-list"></div>
                 </div>
             </aside>
 
-            <!-- 中间：问答区 -->
             <main class="col-center">
                 <div class="card input-area">
-                    <textarea id="question-input" placeholder="输入你的问题，配图更容易得到回答哦..."></textarea>
-                    
+                    <textarea id="question-input" placeholder="输入问题或上传图片，AI会帮你解答..."></textarea>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <!-- 图片上传按钮 -->
                         <div class="file-upload-wrapper">
                             <button class="btn" style="background:#f0f0f0; border:1px solid #ddd;">📷 上传图片</button>
                             <input type="file" id="file-input" accept="image/*" onchange="previewImage(this)">
                         </div>
                         <span id="file-name" style="font-size:12px; color:#666; margin-right:auto; margin-left:10px;"></span>
-
                         <div style="text-align: right;">
                             <span style="font-size: 12px; color: #999; margin-right: 10px;">+5 积分</span>
                             <button class="btn btn-primary" onclick="postQuestion()">发布问题</button>
                         </div>
                     </div>
                 </div>
-
-                <div class="qa-scroll-area" id="qa-list">
-                    <!-- 动态内容 -->
-                </div>
+                <div class="qa-scroll-area" id="qa-list"></div>
             </main>
 
-            <!-- 右侧：商城 -->
             <aside class="col-right">
                 <div class="card">
                     <h3>🎁 积分商城</h3>
@@ -130,42 +111,31 @@
                         <div class="shop-tab" onclick="switchTab('final')">期末</div>
                         <div class="shop-tab" onclick="switchTab('other')">周边</div>
                     </div>
-                    <div id="shop-container"><!-- JS渲染 --></div>
+                    <div id="shop-container"></div>
                 </div>
             </aside>
         </div>
     </div>
 
     <script>
-        // ----------------------------------------------------
         // 配置区
-        // ----------------------------------------------------
         const LEANCLOUD_ID = "VHlIlaHjqetUYuGkN9US6rrP-MdYXbMMI";
         const LEANCLOUD_KEY = "9onESiZ5ikdHZEp8nm4vv58V";
         const LEANCLOUD_SERVER = "https://vhlilahj.api.lncldglobal.com";
-        
-        // 🤖 DeepSeek API Key (注意安全!)
         const DEEPSEEK_API_KEY = "sk-6dcb9da4bb3a41f9a7f44d6a8fab10f9";
 
-        // ----------------------------------------------------
         // 初始化
-        // ----------------------------------------------------
         try {
             AV.init({ appId: LEANCLOUD_ID, appKey: LEANCLOUD_KEY, serverURL: LEANCLOUD_SERVER });
         } catch (err) { console.error("SDK Init Error", err); }
 
-        // 静态数据
-        const ddlData = [
-            { title: 'EAP演讲PPT', time: '今天 23:59', urgent: true },
-            { title: '数据结构实验', time: '明天 12:00', urgent: false }
-        ];
+        const ddlData = [{ title: 'EAP演讲PPT', time: '今天 23:59', urgent: true }];
         const shopData = {
             midterm: [{ name: 'PTC数学复习', cost: 30, icon: '📚' }],
             final: [{ name: 'PTC期末复习', cost: 200, icon: '🎒' }],
             other: [{ name: 'PTC猫头鹰', cost: 500, icon: '🦉' }]
         };
 
-        // UI 工具
         const ui = {
             loading: (show) => document.getElementById('loading').classList.toggle('hidden', !show),
             showMain: () => {
@@ -179,9 +149,6 @@
             }
         };
 
-        // ----------------------------------------------------
-        // 用户逻辑
-        // ----------------------------------------------------
         async function doRegister() {
             const u = document.getElementById('username-input').value;
             const p = document.getElementById('password-input').value;
@@ -221,11 +188,6 @@
             document.getElementById('user-points').innerText = u.get('points') || 0;
         }
 
-        // ----------------------------------------------------
-        // 核心功能：发帖 (含图片)
-        // ----------------------------------------------------
-        
-        // 文件选择预览
         function previewImage(input) {
             const fileName = input.files[0] ? input.files[0].name : '';
             document.getElementById('file-name').innerText = fileName ? `已选: ${fileName}` : '';
@@ -245,28 +207,24 @@
                 post.set('content', content);
                 post.set('author', AV.User.current());
 
-                // 如果有图片，先上传图片
                 if (file) {
                     const avFile = new AV.File(file.name, file);
-                    await avFile.save(); // 上传到 LeanCloud
-                    post.set('image', avFile); // 把图片关联到帖子
+                    await avFile.save(); 
+                    post.set('image', avFile);
                 }
 
                 await post.save();
                 
-                // 积分+5
                 const user = AV.User.current();
                 user.increment('points', 5);
                 await user.save();
 
-                // 重置输入框
                 document.getElementById('question-input').value = '';
                 fileInput.value = '';
                 document.getElementById('file-name').innerText = '';
                 
                 updatePoints();
                 await loadQuestions();
-                alert('发布成功！');
             } catch(e) {
                 alert('发布失败: ' + e.message);
             } finally {
@@ -274,9 +232,6 @@
             }
         }
 
-        // ----------------------------------------------------
-        // 核心功能：列表渲染 + AI 解答
-        // ----------------------------------------------------
         async function loadQuestions() {
             const query = new AV.Query('Post');
             query.descending('createdAt');
@@ -287,25 +242,23 @@
                 
                 container.innerHTML = results.map(post => {
                     const id = post.id;
-                    const author = post.get('author') ? post.get('author').getUsername() : '未知';
                     const content = post.get('content') || '';
-                    const time = post.createdAt.toLocaleString();
-                    // 处理图片
                     const imgFile = post.get('image');
-                    const imgHtml = imgFile ? `<img src="${imgFile.url()}" class="post-image" onclick="window.open(this.src)">` : '';
+                    const imgUrl = imgFile ? imgFile.url() : '';
+                    const imgHtml = imgFile ? `<img src="${imgUrl}" class="post-image" onclick="window.open(this.src)">` : '';
 
                     return `
                     <div class="card" id="card-${id}">
-                        <div style="font-size:12px; color:#999; margin-bottom:8px;">👤 ${author} · ${time}</div>
+                        <div style="font-size:12px; color:#999; margin-bottom:8px;">
+                            👤 ${post.get('author')?.getUsername() || '未知'} · ${post.createdAt.toLocaleString()}
+                        </div>
                         <div style="font-size:15px; line-height:1.5;">${content}</div>
                         ${imgHtml}
                         
-                        <!-- AI 按钮 -->
                         <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-                            <button class="btn btn-ai" onclick="askDeepSeek('${id}', \`${content.replace(/`/g, '')}\`)">
+                            <button class="btn btn-ai" onclick="askDeepSeek('${id}', \`${content.replace(/`/g, '')}\`, '${imgUrl}')">
                                 🤖 AI 帮我解答
                             </button>
-                            <!-- AI 回答容器 -->
                             <div id="ai-box-${id}" class="ai-response-box">
                                 <div class="ai-title">🤖 DeepSeek 回答：</div>
                                 <div id="ai-content-${id}">Thinking...</div>
@@ -317,18 +270,36 @@
         }
 
         // ----------------------------------------------------
-        // 核心功能：调用 DeepSeek API
+        // ⚡️ 核心升级：支持图片的 AI 提问逻辑
         // ----------------------------------------------------
-        async function askDeepSeek(cardId, questionText) {
+        async function askDeepSeek(cardId, userQuestion, imageUrl) {
             const box = document.getElementById(`ai-box-${cardId}`);
             const contentDiv = document.getElementById(`ai-content-${cardId}`);
-            
-            // 显示回答框
             box.style.display = 'block';
-            contentDiv.innerHTML = '🧠 正在思考中... (DeepSeek V3)';
+            contentDiv.innerHTML = '🔍 正在分析请求...';
+
+            let finalPrompt = userQuestion;
 
             try {
-                // 构造请求
+                // 1. 如果有图片，先进行 OCR 文字识别
+                if (imageUrl && imageUrl !== 'undefined') {
+                    contentDiv.innerHTML = '👁️ AI 正在努力阅读图片中的文字... (可能需要几秒钟)';
+                    
+                    // 使用 Tesseract.js 识别图片
+                    const worker = await Tesseract.createWorker('eng+chi_sim'); // 支持中英文
+                    const ret = await worker.recognize(imageUrl);
+                    const extractedText = ret.data.text;
+                    await worker.terminate();
+
+                    console.log("识别到的文字：", extractedText);
+
+                    // 2. 把识别到的文字拼接到 Prompt 里
+                    finalPrompt = `【用户问题】：${userQuestion}\n\n【图片中识别到的文字内容】：\n${extractedText}\n\n请结合图片里的文字内容，回答用户的问题。如果图片是题目，请给出详细解析。`;
+                    
+                    contentDiv.innerHTML = '🧠 文字识别完成，DeepSeek 正在思考...';
+                }
+
+                // 3. 发送给 DeepSeek
                 const response = await fetch("https://api.deepseek.com/chat/completions", {
                     method: "POST",
                     headers: {
@@ -338,46 +309,34 @@
                     body: JSON.stringify({
                         model: "deepseek-chat",
                         messages: [
-                            { role: "system", content: "你是一个热心的大学助教，请用简洁、鼓励的语气回答学生的学术问题。" },
-                            { role: "user", content: questionText }
+                            { role: "system", content: "你是一个学术助教。如果用户提供了图片文字，请重点根据这些文字进行解答。" },
+                            { role: "user", content: finalPrompt }
                         ],
                         stream: false
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`API 错误: ${response.status}`);
-                }
-
+                if (!response.ok) throw new Error(`API 错误: ${response.status}`);
                 const data = await response.json();
-                const answer = data.choices[0].message.content;
-
-                // 使用 marked.js 渲染 Markdown 格式
-                contentDiv.innerHTML = marked.parse(answer);
+                
+                contentDiv.innerHTML = marked.parse(data.choices[0].message.content);
 
             } catch (error) {
-                contentDiv.innerHTML = `<span style="color:red">AI 发生错误: ${error.message}</span>`;
+                contentDiv.innerHTML = `<span style="color:red">出错啦: ${error.message}<br>可能是图片太模糊或网络超时。</span>`;
             }
         }
 
-        // ----------------------------------------------------
-        // 辅助渲染
-        // ----------------------------------------------------
         function renderDDL() {
             document.getElementById('ddl-list').innerHTML = ddlData.map(i => 
                 `<div class="ddl-item"><span>${i.title}</span><span style="color:${i.urgent?'red':'#999'}">${i.time}</span></div>`
             ).join('');
         }
         function renderShop() {
-            // 简单实现，默认显示中期
             document.getElementById('shop-container').innerHTML = shopData['midterm'].map(i => 
                 `<div class="shop-item"><div class="shop-item">📚</div><div style="flex:1;margin-left:10px;"><b>${i.name}</b><br><small>${i.cost}分</small></div><button class="btn" style="border:1px solid #4a90e2;color:#4a90e2">兑换</button></div>`
             ).join('');
         }
-
-        window.onload = function() {
-            if(AV.User.current()) initApp();
-        };
+        window.onload = function() { if(AV.User.current()) initApp(); };
     </script>
 </body>
 </html>
